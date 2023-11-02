@@ -3,6 +3,7 @@ import requests
 
 # 변경점
 # 1 : HTTP 배너그래빙의 기능을 변경하여 HTTP와 HTTPS 구별 기능 추가
+#TEST
 
 def http_banner_grabbing(target_host, target_port): # 변수 설정 대로 대입하는 과정
     try:
