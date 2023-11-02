@@ -13,13 +13,13 @@ def http_banner_grabbing(target_host, target_port): # 변수 설정 대로 대�
     except Exception as e:
         return False
 
-def checkMySQL(banner): # MySql 배너그래빙
+def checkMySQL(banner):
     if b"mysql" in banner:
         return True
     else:
         return False
     
-def checkSSH(banner): # SSH 배너그래빙
+def checkSSH(banner):
     if b"SSH" in banner:
         return True
     else:
