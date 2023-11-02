@@ -54,6 +54,7 @@ def tcpBannerGrap(ip, port):
         # 서버 응답
         banner = s.recv(1024)
         service = banner
+        note = banner
         
         if(checkMySQL(banner)):
             service = "mysql"
@@ -65,23 +66,24 @@ def tcpBannerGrap(ip, port):
             service = 'telnet'
         
         s.close()
-        return service
+        return service, note
     
     except Exception as e:
         if "대상 컴퓨터에서 연결을 거부" in str(e):
-            return "port close"
-        return e
+            return "port close", None
+        return e, None
 
 
 
 def main():
     services = []
     ip = "192.168.56.101"
-    ports = [22]
+    ports = [23]
+    note = ""
     
     for port in ports:
-        service = tcpBannerGrap(ip, port)
-        services.append([port,service])
+        service, note = tcpBannerGrap(ip, port)
+        services.append([port, service, note]) # 포트, 서비스, 버전을 비롯한 추가 내용
     
     print(services)
         
