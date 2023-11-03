@@ -13,25 +13,52 @@ def http_banner_grabbing(target_host, target_port): # 변수 설정 대로 대�
     except Exception as e:
         return False
 
-def checkMySQL(banner):
+def checkMySQL(ip, port):
+    # 소켓 생성 및 연결
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # TCP 방식
+    s.connect((ip, port))
+    s.settimeout(5)
+    # 서버 응답
+    banner = s.recv(1024)
+        
     if b"mysql" in banner:
         return True
     else:
         return False
     
-def checkSSH(banner):
+def checkSSH(ip, port):
+    # 소켓 생성 및 연결
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # TCP 방식
+    s.connect((ip, port))
+    s.settimeout(5)
+    # 서버 응답
+    banner = s.recv(1024)
+    
     if b"SSH" in banner:
         return True
     else:
         return False
 
-def checkFTP(banner):
+def checkFTP(ip, port):
+    # 소켓 생성 및 연결
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # TCP 방식
+    s.connect((ip, port))
+    s.settimeout(5)
+    # 서버 응답
+    banner = s.recv(1024)
+    
     if (b"FTP" in banner) or ("FileZilla".encode() in banner):
         return True
     else:
         return False
     
-def checkTelnet(banner):
+def checkTelnet(ip, port):
+    # 소켓 생성 및 연결
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # TCP 방식
+    s.connect((ip, port))
+    s.settimeout(5)
+    # 서버 응답
+    banner = s.recv(1024)
     if(b"\xff\xfd\x18\xff\xfd \xff\xfd#\xff\xfd" in banner): # telnet 서버측에서 연결을 위해 보내는 응답
         return True
     else:
@@ -47,21 +74,15 @@ def tcpBannerGrap(ip, port):
         elif httpCheck == "https":
             return "https"
         
-        # 소켓 생성 및 연결
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # TCP 방식
-        s.connect((ip, port))
-        s.settimeout(5)
-        # 서버 응답
-        banner = s.recv(1024)
-        service = banner
+        service = None
         
-        if(checkMySQL(banner)):
+        if(checkMySQL(ip, port)):
             service = "mysql"
-        elif(checkSSH(banner)):
+        elif(checkSSH(ip, port)):
             service = "ssh"
-        elif(checkFTP(banner)):
+        elif(checkFTP(ip, port)):
             service = "ftp"
-        elif(checkTelnet(banner)):
+        elif(checkTelnet(ip, port)):
             service = 'telnet'
         
         s.close()
