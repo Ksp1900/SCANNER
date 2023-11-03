@@ -1,7 +1,7 @@
 import socket
 import pymysql
 
-ip = "127.0.0.1"   
+ip = "192.168.56.101"   
 port = 3306
 check_list = [b'caching_sha2', b'mysql'] # 체크리스트
 

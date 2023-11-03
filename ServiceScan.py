@@ -15,22 +15,35 @@ def http_banner_grabbing(target_host, target_port): # 변수 설정 대로 대�
 
 def checkMySQL(ip, port):
     # 소켓 생성 및 연결
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # TCP 방식
+    check_list = [b'caching_sha2', b'mysql'] # 체크리스트
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((ip, port))
-    s.settimeout(5)
-    # 서버 응답
+    s.settimeout(2)
     banner = s.recv(1024)
-    print(banner)
-    if b"mysql" in banner:
-        return True
-    else:
-        return False
+    packet = banner[4:] # packet Length, Number 제외
+    code = int(packet[0]) # 일반적인 경우 0xA Block된 경우 0xFF
+
+    for check in check_list:
+        if check in banner:
+            if(code == 255): #Blocked된 경우
+                return True
+            elif(code == 10): #일반적인 mysql 프로토콜 번호
+                packet = str(packet)
+                ver = packet[4:packet.find("\\x00")] # Version 추출 필요할 경우 version 까지 리턴
+                return True
+            else:
+                a = open("checkLog.txt",'a') #문자열은 매칭하나 추가 검증 실패시 로그
+                a.write(f"{ip} : {port} : {banner}\n")
+                return False
+    
+    return False
     
 def checkSSH(ip, port):
     # 소켓 생성 및 연결
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # TCP 방식
     s.connect((ip, port))
-    s.settimeout(5)
+    s.settimeout(2)
     # 서버 응답
     banner = s.recv(1024)
     
@@ -43,7 +56,7 @@ def checkFTP(ip, port):
     # 소켓 생성 및 연결
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # TCP 방식
     s.connect((ip, port))
-    s.settimeout(5)
+    s.settimeout(2)
     # 서버 응답
     banner = s.recv(1024)
     
@@ -78,12 +91,16 @@ def tcpBannerGrap(ip, port):
         
         if(checkMySQL(ip, port)):
             service = "mysql"
+            print(f"{ip} : {port} : {service}")
         elif(checkSSH(ip, port)):
             service = "ssh"
+            print(f"{ip} : {port} : {service}")
         elif(checkFTP(ip, port)):
             service = "ftp"
+            print(f"{ip} : {port} : {service}")
         elif(checkTelnet(ip, port)):
             service = 'telnet'
+            print(f"{ip} : {port} : {service}")
         
         return service
     
@@ -96,8 +113,8 @@ def tcpBannerGrap(ip, port):
 
 def main():
     services = []
-    ip = "192.168.56.101"
-    ports = [3306]
+    ip = "127.0.0.1"
+    ports = [21,22,23,80,443,3306]
     
     for port in ports:
         service = tcpBannerGrap(ip, port)
