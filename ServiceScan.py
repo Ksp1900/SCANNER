@@ -85,7 +85,6 @@ def tcpBannerGrap(ip, port):
         elif(checkTelnet(ip, port)):
             service = 'telnet'
         
-        s.close()
         return service
     
     except Exception as e:
