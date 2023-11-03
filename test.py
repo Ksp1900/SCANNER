@@ -1,41 +1,30 @@
 import socket
-import requests #HTTP를 위한.. 함수..
+import pymysql
 
-def check_http(ip, port):
-    try:
-        response = requests.get(f"http://{ip}:{port}", timeout=3)
-        return True, f"HTTP {response.status_code}"
-    except requests.RequestException:
-        return False, "Not HTTP"
+ip = "127.0.0.1"   
+port = 3306
+check_list = [b'caching_sha2', b'mysql'] # 체크리스트
 
-def grab_banner(ip, port):
-    try:
-        with socket.create_connection((ip, port), timeout=5) as s:
-            banner = s.recv(1024).decode(errors='ignore')
-            return True, banner
-    except socket.error:
-        return False, "Connection refused or timed out"
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.connect((ip, port))
+s.settimeout(2)
+banner = s.recv(1024)
+pack = banner[4:] # packet Length, Number 제외
+code = int(pack[0]) # 일반적인 경우 0xA Block된 경우 0xFF
 
-def read_tested_ports(file_path):
-    with open(file_path, 'r') as f:
-        return [int(line.strip()) for line in f if line.strip().isdigit()]
-
-
-def main():
-    ip = "192.168.56.101"
-    open_ports = [21,22,23,80,443]
-    print(f"Open ports: {open_ports}")
-    
-    for port in open_ports:
-        is_http, http_result = check_http(ip, port)
-        if is_http:
-            print(f"Port {port}: {http_result}")
+for check in check_list:
+    if check in banner:
+        if(code == 255):
+            print("blocked")
+            break
         else:
-            is_service, banner_result = grab_banner(ip, port)
-            if is_service:
-                print(f"Port {port}: {banner_result}")
-            else:
-                print(f"Port {port}: {banner_result}")
+            pack = str(pack)
+            pack = pack[4:pack.find("\\x00")] # Version 추출
+            print(pack)
+            break
 
-if __name__ == "__main__":
-    main()
+
+# s.send(request.encode())
+# print(s.recv(1024))
+
+# s.close()

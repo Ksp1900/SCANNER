@@ -20,7 +20,7 @@ def checkMySQL(ip, port):
     s.settimeout(5)
     # 서버 응답
     banner = s.recv(1024)
-        
+    print(banner)
     if b"mysql" in banner:
         return True
     else:
@@ -97,7 +97,7 @@ def tcpBannerGrap(ip, port):
 def main():
     services = []
     ip = "192.168.56.101"
-    ports = [22]
+    ports = [3306]
     
     for port in ports:
         service = tcpBannerGrap(ip, port)
