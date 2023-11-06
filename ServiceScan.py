@@ -1,5 +1,10 @@
 import socket
 import requests
+import smtplib
+import paramiko
+import ssl
+import sys
+
 
 # 변경점
 # 1 : HTTP 배너그래빙의 기능을 변경하여 HTTP와 HTTPS 구별 기능 추가
@@ -41,14 +46,39 @@ def checkMySQL(ip, port):
     
 def checkSSH(ip, port):
     # 소켓 생성 및 연결
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # TCP 방식
-    s.connect((ip, port))
-    s.settimeout(2)
-    # 서버 응답
-    banner = s.recv(1024)
-    
-    if b"SSH" in banner:
-        return True
+    banner = None
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # TCP 방식
+        s.settimeout(5)
+        s.connect((ip, port))
+        # 서버 응답
+        banner = s.recv(1024).decode(errors='ignore')
+        s.close()
+        if "SSH" in banner:
+            print(f"Port {port}: 소켓에 배너가 확인 되었습니다.: {banner}")
+            return True
+    except (socket.timeout, socket.error):
+        print(f"Port{port}에서 SSH 배너를 확인하지 못했습니다. paramiko로 더 정교하게 스캔하겠습니다.")
+
+    if not banner:
+        try:
+            transport = paramiko.Transport((ip, port))
+            transport.start_client()
+            paramiko_banner = transport.remote_version
+            transport.close()
+
+            if paramiko_banner:
+                print(f"Port{port}:에서 SSH 배너를 확인했습니다. 파라미코 :{paramiko_banner}")
+            else:
+                print(f"Port {port}:에서 SSH 배너를 확인하지 못했습니다.")
+                return False
+        except paramiko.SSHException as e:
+            print(f"Port {port}: SSH 에러: {str(e)}")
+            return False
+        except Exception as e:
+            print(f"Port {port}: 연결중 에러가 발생했습니다.: {str(e)}")
+            return False
+        
     else:
         return False
 
@@ -69,12 +99,28 @@ def checkTelnet(ip, port):
     # 소켓 생성 및 연결
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # TCP 방식
     s.connect((ip, port))
-    s.settimeout(5)
+    s.settimeout(8)
     # 서버 응답
     banner = s.recv(1024)
     if(b"\xff\xfd\x18\xff\xfd \xff\xfd#\xff\xfd" in banner): # telnet 서버측에서 연결을 위해 보내는 응답
         return True
     else:
+        return False
+
+def check_SMTP(ip, port):
+    try:
+        with smtplib.SMTP(ip, port, timeout=5) as server:
+            banner = server.ehlo()
+            if not banner:
+                banner = server.helo()
+            print("SMTP server banner:", banner)
+            server.quit()
+            return True
+    except smtplib.SMTPException as e:
+        print(f"SMTP error on port {port}: {str(e)}")
+        return False
+    except Exception as e:
+        print(f"General error on port {port}: {str(e)}")
         return False
     
 
@@ -101,6 +147,9 @@ def tcpBannerGrap(ip, port):
         elif(checkTelnet(ip, port)):
             service = 'telnet'
             print(f"{ip} : {port} : {service}")
+        elif(check_SMTP(ip, port)):
+            service = 'smtp'
+            print(f"{ip} : {port} : {service}")
         
         return service
     
@@ -113,8 +162,8 @@ def tcpBannerGrap(ip, port):
 
 def main():
     services = []
-    ip = "127.0.0.1"
-    ports = [21,22,23,80,443,3306]
+    ip = "192.168.56.101"
+    ports = [21,22,23,80,443,3306,2023]
     
     for port in ports:
         service = tcpBannerGrap(ip, port)
