@@ -1,30 +1,14 @@
 import socket
-import pymysql
+import telnetlib
 
-ip = "192.168.56.101"   
-port = 3306
-check_list = [b'caching_sha2', b'mysql'] # 체크리스트
+ip = "192.168.56.101"
+port = 2023
 
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.connect((ip, port))
-s.settimeout(2)
-banner = s.recv(1024)
-pack = banner[4:] # packet Length, Number 제외
-code = int(pack[0]) # 일반적인 경우 0xA Block된 경우 0xFF
+def checkTFTP(ip,port):
+    s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+    s.settimeout(5)
+    s.sendto(b'',(ip,port))
+    print(s.recvfrom(1024))
+    s.close()
 
-for check in check_list:
-    if check in banner:
-        if(code == 255):
-            print("blocked")
-            break
-        else:
-            pack = str(pack)
-            pack = pack[4:pack.find("\\x00")] # Version 추출
-            print(pack)
-            break
-
-
-# s.send(request.encode())
-# print(s.recv(1024))
-
-# s.close()
+checkTFTP(ip,port)

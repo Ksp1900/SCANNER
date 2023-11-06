@@ -2,6 +2,8 @@ import socket
 import requests
 import smtplib
 import paramiko
+import ftplib
+import telnetlib
 import ssl
 import sys
 
@@ -82,29 +84,25 @@ def checkSSH(ip, port):
     else:
         return False
 
-def checkFTP(ip, port):
-    # 소켓 생성 및 연결
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # TCP 방식
-    s.connect((ip, port))
-    s.settimeout(2)
-    # 서버 응답
-    banner = s.recv(1024)
-    
-    if (b"FTP" in banner) or ("FileZilla".encode() in banner):
+def checkFTP(ip,port):
+    try:
+        ftp = ftplib.FTP()
+        con = ftp.connect(ip, port)
+        con = con.split(" ")
+        stat = con[0] # 상태 코드
+        ver = con[1] + " " + con[2] # 버전 식별
         return True
-    else:
+    except Exception as e:
         return False
+
     
 def checkTelnet(ip, port):
-    # 소켓 생성 및 연결
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # TCP 방식
-    s.connect((ip, port))
-    s.settimeout(8)
-    # 서버 응답
-    banner = s.recv(1024)
-    if(b"\xff\xfd\x18\xff\xfd \xff\xfd#\xff\xfd" in banner): # telnet 서버측에서 연결을 위해 보내는 응답
+    try:
+        tel = telnetlib.Telnet(ip,port)
+        ver = tel.read_until(b"login")
+        ver = ver.decode().split("\n")[0] # 버전 식별
         return True
-    else:
+    except Exception as e:
         return False
 
 def check_SMTP(ip, port):
@@ -137,20 +135,17 @@ def tcpBannerGrap(ip, port):
         
         if(checkMySQL(ip, port)):
             service = "mysql"
-            print(f"{ip} : {port} : {service}")
         elif(checkSSH(ip, port)):
             service = "ssh"
-            print(f"{ip} : {port} : {service}")
         elif(checkFTP(ip, port)):
             service = "ftp"
-            print(f"{ip} : {port} : {service}")
         elif(checkTelnet(ip, port)):
             service = 'telnet'
-            print(f"{ip} : {port} : {service}")
         elif(check_SMTP(ip, port)):
             service = 'smtp'
+
+        if service is not None:
             print(f"{ip} : {port} : {service}")
-        
         return service
     
     except Exception as e:
@@ -163,7 +158,7 @@ def tcpBannerGrap(ip, port):
 def main():
     services = []
     ip = "192.168.56.101"
-    ports = [21,22,23,80,443,3306,2023]
+    ports = [21,22,23,2024,80,443,3306,2023,587]
     
     for port in ports:
         service = tcpBannerGrap(ip, port)
