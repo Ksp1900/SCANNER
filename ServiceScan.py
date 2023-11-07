@@ -69,10 +69,10 @@ def checkMySQL(ip, port):
         return False
     
 def checkSSH(ip, port):
-    # 소켓 생성 및 연결
     print(f"{port} : checking ssh...")
     banner = None
     try:
+        # 소켓 생성 및 연결
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # TCP 방식
         s.settimeout(5)
         s.connect((ip, port))
@@ -81,22 +81,18 @@ def checkSSH(ip, port):
         s.close()
         if "SSH" in banner:
             return True
-    except (socket.timeout, socket.error):
+    except Exception as e :
         try:
             transport = paramiko.Transport((ip, port))
             transport.start_client()
             paramiko_banner = transport.remote_version
             transport.close()
-
             if paramiko_banner:
                 return True
-                
-        except paramiko.SSHException as e:
-            return False
         except Exception as e:
             return False
     
-    
+
 def checkFTP(ip,port):
     print(f"{port} : checking ftp...")
     try:
@@ -164,6 +160,44 @@ def checkSMB(ip,port):
             return False
     except Exception as e:
         return False
+
+def check_RDP(ip, port):
+    print(f"{port} : checking rdp...")
+    rdp_request_packet = bytes.fromhex('030000130ee000000000000100080003000000')
+    min_size = 11
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s :
+            s.settimeout(5)
+            s.connect((ip, port))
+            s.sendall(rdp_request_packet)
+            response = s.recv(1024)
+            if not response:
+                return False
+            elif len(response) >= min_size:
+                return True
+            else:
+                return False
+    except Exception as e:
+            return False
+        
+def check_imap(ip, port):
+    print(f"{port} : checking imap...")
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(2)
+        s.connect((ip, port))
+        banner = s.recv(1024)
+        s.close()
+        return True 
+    except Exception as e:
+        try:
+            context = ssl.create_default_context()
+            with socket.create_connection((ip, port), timeout=2) as sock:
+                with context.wrap_socket(sock, server_hostname=ip) as ssock:
+                    banner = ssock.recv(1024)
+                    return True, 'IMAPS'
+        except Exception as e:
+            return False, None
 
 ## UDP SERVICE ##
 def checkNTP(ip,port):
@@ -247,6 +281,10 @@ def tcpBannerGrap(ip, port):
             service = 'smtp'
         elif(checkSMB(ip,port)):
             service = 'smb'
+        elif(check_RDP(ip,port)):
+            service = 'rdp'
+        elif(check_imap(ip,port)):
+            service = 'imap'
         return service
     
     except Exception as e:
@@ -258,8 +296,8 @@ def tcpBannerGrap(ip, port):
 
 def main():
     services = []
-    ip = "152.70.185.32"
-    ports = [22,445,80,465]
+    ip = "192.168.56.101"
+    ports = [21,23,22,445,80,465,2023,2024,2025]
     
     for port in ports:
         service = tcpBannerGrap(ip, port)
