@@ -286,7 +286,7 @@ def tcpBannerGrab(ip, port):
         elif httpCheck == "https":
             return "https"
         
-        service = None
+        service = 'Unknown'
         
         if(checkMySQL(ip, port)):
             service = "mysql"
