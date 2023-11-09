@@ -1,38 +1,52 @@
 from scapy.layers.inet import ICMP, IP, TCP, sr1
 import socket
 from datetime import datetime
-
-start = datetime.now()
+from concurrent.futures import ThreadPoolExecutor
 
 def icmp_probe(ip):
     icmp_packet = IP(dst=ip) / ICMP()
     resp_packet = sr1(icmp_packet, timeout=10)
     return resp_packet is not None
 
-def syn_scan(ip, ports):
-    for port in ports:
-        syn_packet = IP(dst=ip) / TCP(dport=port, flags='S')
-        resp_packet = sr1(syn_packet, timeout=10)
-        if resp_packet is not None:
-            if resp_packet.haslayer(TCP) and (resp_packet[TCP].flags & 0x12 == 0x12):
-                print(f'{ip}:{port} is open/{resp_packet.sport}')
-            else:
-                print(f'{ip}:{port} is closed')
+def scan_port(ip, port, open_tcp_ports):
+    syn_packet = IP(dst=ip) / TCP(dport=port, flags='S')
+    resp_packet = sr1(syn_packet, timeout=10)
+    if resp_packet is not None:
+        if resp_packet.haslayer(TCP) and (resp_packet[TCP].flags & 0x12 == 0x12):
+            open_tcp_ports.append(port)
+            print(f'{ip}:{port} is open/{resp_packet.sport}')
         else:
-            print(f'{ip}:{port} is filtered or no response')
-
-ends = datetime.now()
-
-if __name__ == '__main__':
-    name = input('Hostname / IP: ')
-    ip = socket.gethostbyname(name)
-    ports = [20, 21, 22, 23, 25, 43, 53, 80, 2023, 2024]
-
-try:
-    if icmp_probe(ip):
-        syn_scan(ip, ports)
+            print(f'{ip}:{port} is closed')
     else:
-        print('Failed to send ICMP packet')
-except Exception as e:
-    print('Scan completed!')
-    print(f'Time: {ends - start}')
+        print(f'{ip}:{port} is filtered or no response')
+
+def syn_scan(ip, start_port, end_port):
+    open_tcp_ports = []
+    
+    with ThreadPoolExecutor(max_workers=10) as executor:   #실행 속도 증가
+        futures = []
+        for port in range(start_port, end_port + 1):
+            futures.append(executor.submit(scan_port, ip, port, open_tcp_ports))
+        
+        for future in futures:
+            future.result()  
+
+    return open_tcp_ports
+
+def scan(ip):
+    ip = socket.gethostbyname(ip)
+    start_port = 0
+    end_port = 65535
+
+    try:
+        if icmp_probe(ip):
+            open_ports = syn_scan(ip, start_port, end_port)
+            print('Syn Scan completed!')
+            return open_ports
+        else:
+            print('Failed to send ICMP packet')
+            return False
+    except Exception as e:
+        print('Error:', e)
+        return False
+

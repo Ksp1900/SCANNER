@@ -5,12 +5,14 @@ import paramiko
 import ftplib
 import telnetlib
 import ssl
-import sys
+import struct
 
 
-# 변경점
-# 1 : HTTP 배너그래빙의 기능을 변경하여 HTTP와 HTTPS 구별 기능 추가
-#TEST
+# 변경점 
+# 1 : 
+# 2 : 
+# 3 : 
+# 4 : 
 
 ## TCP SERVICE ##
 def http_banner_grabbing(ip, port): # https 요청까지 하기 위해 변수를 수정했습니다.
@@ -24,55 +26,50 @@ def http_banner_grabbing(ip, port): # https 요청까지 하기 위해 변수를
             context = ssl.create_default_context()
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE
-            with socket.create_connection((ip, port)) as sock:
+            with socket.create_connection((ip, port), timeout=3) as sock:
                 with context.wrap_socket(sock, server_hostname=ip) as ssock:
-                    print(f"ip {ip}, port {port}에 연결합니다.")
+                    ssock.settimeout(4)
                     cert = ssock.getpeercert()
                     print("Server certificate:")
                     for key, value in cert.items():
                         print(f"{key}: {value}")
-            return False
-        except ssl.SSLError as e:
-            return False
         except Exception as e:
             return False
     except Exception as e:
         return False
-
+    
 def checkMySQL(ip, port):
     # 소켓 생성 및 연결
     print(f"{port} : checking mysql...")
-    check_list = [b'caching_sha2', b'mysql', b'MySQL', b'MariaDB'] # 체크리스트
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((ip, port))
         s.settimeout(2)
         banner = s.recv(1024)
-        packet = banner[4:] # packet Length, Number 제외
-        code = int(packet[0]) # 일반적인 경우 0xA Block된 경우 0xFF
+        packet_Len = int.from_bytes(banner[0:2], 'little') # packet Length[3 Bytes]
+        packet_Number = banner[3] # packet Number[1 Bytes]
+        proto = int(banner[4]) # MySQL Protocol[1Bytes] 일반적인 경우 0xA Block된 경우 0xFF
 
-        for check in check_list:
-            if check in banner:
-                if(code == 255): #Blocked된 경우
-                    return True
-                elif(code == 10): #일반적인 mysql 프로토콜 번호
-                    packet = str(packet)
-                    ver = packet[4:packet.find("\\x00")] # 버전 식별
-                    return True
-                else:
-                    a = open("checkLog.txt",'a') #문자열은 매칭하나 추가 검증 실패시 로그
-                    a.write(f"{ip} : {port} : {banner}\n")
-                    return False
-        
+        if packet_Len == (int(banner.__len__()) - 4) and packet_Number == 0: # packet 길이와 packet 번호가 mysql 프로토콜에 일반적인 값인지 확인
+            if(proto == 255): #Blocked된 경우 MySQL Protocol
+                return True
+            elif(proto == 10): #일반적인 MySQL Protocol
+                packet = str(banner[4:])
+                ver = packet[4:packet.find("\\x00")] # 버전 식별
+                return True
+            else:
+                a = open("checkLog.txt",'a') # mysql 패킷헤더는 일치하나 프로토콜 검증 실패 시
+                a.write(f"{ip} : {port} : {banner}\n")
+                return False
         return False
     except Exception as e:
         return False
     
 def checkSSH(ip, port):
     print(f"{port} : checking ssh...")
+    # 소켓 생성 및 연결
     banner = None
     try:
-        # 소켓 생성 및 연결
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # TCP 방식
         s.settimeout(5)
         s.connect((ip, port))
@@ -83,7 +80,7 @@ def checkSSH(ip, port):
             return True
     except Exception as e :
         try:
-            transport = paramiko.Transport((ip, port))
+            transport = paramiko.Transport((ip, port),timeout=5)
             transport.start_client()
             paramiko_banner = transport.remote_version
             transport.close()
@@ -91,22 +88,22 @@ def checkSSH(ip, port):
                 return True
         except Exception as e:
             return False
-    
-
+       
 def checkFTP(ip,port):
     print(f"{port} : checking ftp...")
     try:
         ftp = ftplib.FTP()
         recv = ftp.connect(ip, port,timeout=5)
         if recv is not None:
-            ver = ver.decode().split("\n")[0] # 버전 식별
+            ver = recv.split("\n")[0] # 버전 식별
         else:
             return False
-        ftp.login()
+        a = ftp.login('a','a')
         return True
-    except (ftplib.error_temp, ftplib.error_perm, ftplib.error_reply,ftplib.error_proto) as e:
-        print(e)
-        return True
+    except (ftplib.error_perm) as e: # 로그인 에러 리턴시 
+        if '530' in str(e):
+            return True
+        return False
     except Exception as e:
         return False
     
@@ -114,11 +111,14 @@ def checkTelnet(ip, port):
     print(f"{port} : checking telnet...")
     try:
         tel = telnetlib.Telnet(ip,port,timeout=5)
-        recv = tel.read_until(b"login",timeout=5)
-        if recv is not None:
-            ver = ver.decode().split("\n")[0] # 버전 식별
+        recv = tel.read_until(b"login: ",timeout=5)
+        tel.write(b'korea\n')
+        recv = tel.read_until(b"Password: ",timeout=5)
+        if b'Password' in recv:
+            return True
         else:
             return False
+
     except Exception as e:
         return False
 
@@ -129,16 +129,58 @@ def check_SMTP(ip, port):
             banner = server.ehlo()
             if not banner:
                 banner = server.helo()
-            print("SMTP server banner:", banner)
-            server.quit()
             return True
     except smtplib.SMTPException as e:
-        print(f"SMTP error on port {port}: {str(e)}")
         return False
     except Exception as e:
-        print(f"General error on port {port}: {str(e)}")
         return False
-    
+
+def check_RDP(ip, port):
+    x224_cr_pdu = bytes.fromhex('030001ca02f0807f658201b90400000400000000000000000b00000000000000000000010014000c00010000000000010008000300000007000c0008001000010000')
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(5)
+            sock.connect((ip, port))
+            sock.sendall(x224_cr_pdu)
+            response = sock.recv(1024)
+            if response:
+                tpkt_ver = response[0]
+                reserved, length, x224_type = struct.unpack('!BHb', response[1:5]) #받은 자료의 첫 5바이트를 분석.(RDP 필수 패킷들 - TPKT, X.224 Connection Confirm)
+                if tpkt_ver == 3 and x224_type == 0xD0: # RDP가 연결(3HS) 후 보내는 고유 값. TPTK, x224 확인
+                    variable_part_length = struct.unpack('!B', response[5:6])[0] # 길이 확인
+                    if length == len(response) and variable_part_length + 6 <= length:
+                        return True
+                return False
+            else:
+                return False
+    except Exception as e:
+        return False
+
+def check_imap(ip, port):
+    print(f"{port} : checking imap...")
+    imap_request = b'A1 CAPABILITY\r\n'  # IMAP capability request command
+    expected_response_prefix = b'* CAPABILITY'
+    tag_ok_response_prefix = b'A1 OK'
+    try:
+        with socket.create_connection((ip, port), timeout=5) as sock:
+            sock.sendall(imap_request)
+            response = sock.recv(4096).decode('utf-8', 'ignore')
+            if response is not None and (expected_response_prefix in response or tag_ok_response_prefix in response):
+                return True
+    except Exception as e:
+            try:
+                context = ssl.create_default_context()
+                with context.wrap_socket(socket.socket(socket.AF_INET), server_hostname=ip) as ssock:
+                     ssock.settimeout(5)
+                     ssock.connect((ip, port))
+                     ssock.sendall(imap_request)
+                     response = ssock.recv(4096).decode('utf-8', 'ignore')
+                     if response is not None and (expected_response_prefix in response or tag_ok_response_prefix in response):
+                        return True
+            except Exception as e:
+                return False 
+
+
 def checkSMB(ip,port):
     print(f"{port} : checking smb...")
     #SMB PROBE 생성
@@ -161,67 +203,45 @@ def checkSMB(ip,port):
     except Exception as e:
         return False
 
-def check_RDP(ip, port):
-    print(f"{port} : checking rdp...")
-    rdp_request_packet = bytes.fromhex('030000130ee000000000000100080003000000')
-    min_size = 11
+def X (ip, port):
+    sock = None 
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s :
-            s.settimeout(5)
-            s.connect((ip, port))
-            s.sendall(rdp_request_packet)
-            response = s.recv(1024)
-            if not response:
-                return False
-            elif len(response) >= min_size:
-                return True
-            else:
-                return False
+        with socket.create_connection((ip, port), timeout=5) as sock:
+            banner = sock.recv(1024).decode().strip()
+            print(f"{banner}")
     except Exception as e:
-            return False
-        
-def check_imap(ip, port):
-    print(f"{port} : checking imap...")
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(2)
-        s.connect((ip, port))
-        banner = s.recv(1024)
-        s.close()
-        return True 
-    except Exception as e:
-        try:
-            context = ssl.create_default_context()
-            with socket.create_connection((ip, port), timeout=2) as sock:
-                with context.wrap_socket(sock, server_hostname=ip) as ssock:
-                    banner = ssock.recv(1024)
-                    return True, 'IMAPS'
-        except Exception as e:
-            return False, None
+        return False
 
-## UDP SERVICE ##
-def checkNTP(ip,port):
+## UDP SERVICE  1 ##
+def check_NTP(ip,port):
+    print(f"{port} : checking NTP...")
     s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     # NTP PROBE 생성
     pack = b"\xe3\x00\x04\xfa\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00"
     pack2 = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
     pack3 = b"\x00\x00\x00\x00\x00\x00\x00\x00\xc5\x4f\x23\x4b\x71\xb1\x52\xf3"
 
-    pack = pack + pack2 + pack3
+    pack = pack+pack2+pack3
 
     s.settimeout(5)
-    s.sendto(pack,(ip,port))
-    recv, server = s.recvfrom(1024)
-    
-    if recv is not None:
-        return True
-    
-    s.close()
-    
+    try:
+        s.sendto(pack,(ip,port))
+        recv, server = s.recvfrom(1024)
+        
+        if recv is not None:
+            return True
+        return False
+    except:
+        return False
+    finally:
+        s.close()
+
+## UDP SERVICE  2 ##
 def check_DNS(ip, port):
+    print(f"{port} : checking DNS...")
     message = b'\xaa\xaa\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x07version\x04bind\x00\x00\x10\x00\x03'
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(2)
+    sock.settimeout(3)
     try:
         sock.sendto(message,(ip, port))
         data, _ = sock.recvfrom(512)
@@ -231,7 +251,9 @@ def check_DNS(ip, port):
     finally:
         sock.close()
 
+## UDP SERVICE  3 ##
 def check_SIP(ip, port):
+    print(f"{port} : checking SIP...")
     try:
         sip_options_msg = \
         'OPTIONS sip:{} SIP/2.0\r\n' \
@@ -246,7 +268,7 @@ def check_SIP(ip, port):
         'Content-Length: 0\r\n\r\n'.format(ip, ip, ip, ip)
         # UDP 소켓 생성 및 SIP 서버로 메시지 전송
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.settimeout(2)
+        sock.settimeout(3)
 
         sock.sendto(sip_options_msg.encode(), (ip, port)) 
         data, addr = sock.recvfrom(4096) #최대로 받을 양 4096 바이트(버퍼크기)
@@ -257,7 +279,7 @@ def check_SIP(ip, port):
     finally:
         sock.close() #리소스 해제
 
-def tcpBannerGrap(ip, port):
+def tcpBannerGrab(ip, port):
     try:
         # HTTP 소켓 통신시 오류 발생하므로 우선 체크 추후 변경
         httpCheck = http_banner_grabbing(ip,port)
@@ -268,7 +290,6 @@ def tcpBannerGrap(ip, port):
         
         service = None
         
-        # 서비스 체크
         if(checkMySQL(ip, port)):
             service = "mysql"
         elif(checkSSH(ip, port)):
@@ -279,30 +300,35 @@ def tcpBannerGrap(ip, port):
             service = 'telnet'
         elif(check_SMTP(ip, port)):
             service = 'smtp'
+        elif(check_RDP(ip, port)):
+            service = 'RDP'
+        elif(check_imap(ip, port)):
+            service = "IMAP(S)"
         elif(checkSMB(ip,port)):
-            service = 'smb'
-        elif(check_RDP(ip,port)):
-            service = 'rdp'
-        elif(check_imap(ip,port)):
-            service = 'imap'
+            service = 'SMB'
+        elif(check_NTP(ip, port)):
+            service = 'NTP'
+        elif(check_DNS(ip, port)):
+            service = 'DNS'
+        elif(check_SIP(ip, port)):
+            service = 'SIP'
+        elif(X(ip, port)):
+            service = 'etc..'
+
+        if service is not None:
+            print(f"{ip} : {port} : {service}")
         return service
     
     except Exception as e:
-        if "대상 컴퓨터에서 연결을 거부" in str(e):
-            return "port close"
-        return e
+        return 'Unknown'
 
 
 
-def main():
+def serviceScan(ip, ports):
     services = []
-    ip = "192.168.56.101"
-    ports = [21,23,22,445,80,465,2023,2024,2025]
-    
+
     for port in ports:
-        service = tcpBannerGrap(ip, port)
+        service = tcpBannerGrab(ip, port)
         services.append([port,service])
     
-    print(services)
-        
-main()
+    return services
