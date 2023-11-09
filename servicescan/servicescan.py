@@ -278,6 +278,7 @@ def check_SIP(ip, port):
         return False
     finally:
         sock.close() #리소스 해제
+        return False
 
 def tcpBannerGrab(ip, port):
     try:
@@ -323,12 +324,32 @@ def tcpBannerGrab(ip, port):
         return 'Unknown'
 
 
+def udpBannergrab(ip, port):
+    service = None
+    try:
+        if (check_NTP(ip, port)):
+            service = "ntp"
+        elif (check_DNS(ip, port)):
+            service = "dns"
+        elif (check_SIP(ip, port)):
+            service = "sip"
 
-def serviceScan(ip, ports):
+        if service is not None:
+            print(f"{ip} : {port} : {service}")
+            return service
+    except Exception as e:
+            return "대상 컴퓨터에서 연결을 거부"
+
+
+def ServiceScan(ip, ports, protocol="tcp"):
     services = []
-
-    for port in ports:
-        service = tcpBannerGrab(ip, port)
-        services.append([port,service])
+    if protocol == "tcp":
+        for port in ports:
+            service = tcpBannerGrab(ip, port)
+            services.append([port,service])
+    elif protocol == "udp":
+        for port in ports:
+            service = udpBannergrab(ip, port)
+            services.append([port,service])
     
     return services
