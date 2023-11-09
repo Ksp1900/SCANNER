@@ -304,12 +304,6 @@ def tcpBannerGrab(ip, port):
             service = "IMAP(S)"
         elif(checkSMB(ip,port)):
             service = 'SMB'
-        elif(check_NTP(ip, port)):
-            service = 'NTP'
-        elif(check_DNS(ip, port)):
-            service = 'DNS'
-        elif(check_SIP(ip, port)):
-            service = 'SIP'
         elif(X(ip, port)):
             service = 'etc..'
 

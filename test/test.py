@@ -2,7 +2,7 @@ import socket
 import ftplib
 import datetime
 
-ip = "192.168.56.101"
+ip = "192.168.229.131"
 port = 123
 
 def check_NTP(ip,port):
