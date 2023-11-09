@@ -3,7 +3,7 @@ import ftplib
 import datetime
 
 ip = "218.50.136.184"
-port = 9094
+port = 23
 
 def check_DNS(ip, port):
     print(f"{port} : checking DNS...")

@@ -53,7 +53,7 @@ def udp_scan(target_ip):
 
     open_udp_port = []
 
-    for port in range(52,54):  # 포트 수색 범위를 1900부터 2100까지로 한정
+    for port in range(0,65535):  # 포트 수색 범위를 1900부터 2100까지로 한정
         print(f"포트 {port} 스캔 시작")
         # 둘다 보내서 둘다 포트가 열려있다라고 나오는 경우만 open_udp_port 배열에 추가
         try:
